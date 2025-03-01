@@ -10,12 +10,18 @@ export default function HomePage() {
         <p className="text-xl text-gray-600 max-w-2xl text-center">
           Welcome to your web application with Neo4j database integration. Manage people data with name, clout score, and LinkedIn URL attributes.
         </p>
-        <div className="mt-6">
+        <div className="flex flex-col md:flex-row gap-4 mt-6">
           <Link
             href="/people"
             className="rounded-md bg-blue-600 px-6 py-3 text-lg font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
           >
             Go to People Management
+          </Link>
+          <Link
+            href="/graph"
+            className="rounded-md bg-green-600 px-6 py-3 text-lg font-semibold text-white shadow-sm hover:bg-green-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600"
+          >
+            View Graph Visualization
           </Link>
         </div>
       </div>

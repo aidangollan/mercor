@@ -56,12 +56,8 @@ export const runQuery = async <T>(
         const keyStr = String(key);
         const value = record.get(keyStr);
         
-        // Handle Neo4j types like Node, Relationship, etc.
-        if (value && typeof value === 'object' && value.properties) {
-          resultObj[keyStr] = value.properties;
-        } else {
-          resultObj[keyStr] = value;
-        }
+        // Preserve the Neo4j node/relationship structure instead of just extracting properties
+        resultObj[keyStr] = value;
       });
       
       return resultObj as T;
