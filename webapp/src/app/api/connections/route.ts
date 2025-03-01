@@ -102,7 +102,7 @@ async function analyzeWithChatGPT(profileData: any, connectionsData?: any[]) {
     // Initialize the ChatOpenAI model
     const model = new ChatOpenAI({
       openAIApiKey: OPENAI_API_KEY,
-      modelName: "gpt-4-turbo-preview",
+      modelName: "gpt-4o-mini",
       temperature: 0.2,
       maxTokens: 1000, // Limit response size
     });
