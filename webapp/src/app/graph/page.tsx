@@ -122,9 +122,10 @@ export default function GraphPage() {
   const [nodeRepulsion, setNodeRepulsion] = useState<number>(1000);
   const [linkDistance, setLinkDistance] = useState<number>(100);
   const [layoutType, setLayoutType] = useState<LayoutType>('force');
-  const [springLength, setSpringLength] = useState<number>(100);
+  const [springLength, setSpringLength] = useState<number>(250);
   const [springConstant, setSpringConstant] = useState<number>(0.04);
   const [damping, setDamping] = useState<number>(0.09);
+  const [showConnections, setShowConnections] = useState<boolean>(false);
   
   // Node details display
   const [selectedNode, setSelectedNode] = useState<VisNode | null>(null);
@@ -159,12 +160,13 @@ export default function GraphPage() {
       }
     },
     edges: {
-      width: 1,
-      font: {
-        size: 10,
-        align: 'middle'
+      width: 2,
+      selectionWidth: 3,
+      color: {
+        color: '#848484',
+        highlight: '#848484',
+        hover: '#848484'
       },
-      color: { inherit: 'from' },
       smooth: {
         enabled: true,
         type: 'continuous',
@@ -174,14 +176,15 @@ export default function GraphPage() {
         enabled: true,
         color: 'rgba(0,0,0,0.1)',
         size: 3
-      }
+      },
+      hidden: true
     },
     physics: {
       enabled: true,
       barnesHut: {
         gravitationalConstant: -2000,
         centralGravity: 0.3,
-        springLength: 100,
+        springLength: 250,
         springConstant: 0.04,
         damping: 0.09,
         avoidOverlap: 0.1
@@ -196,18 +199,18 @@ export default function GraphPage() {
       }
     },
     interaction: {
+      hover: true,
+      tooltipDelay: 200,
+      hideEdgesOnDrag: true,
       navigationButtons: true,
       keyboard: true,
-      hideEdgesOnDrag: true,
-      tooltipDelay: 200,
-      hover: true,
-      multiselect: true,
-      dragNodes: true,
-      zoomView: true
+      multiselect: true
     },
     layout: {
       improvedLayout: true
-    }
+    },
+    // Disable WebGL rendering
+    renderingMode: 'canvas'
   });
   
   // Check if we're in the browser
@@ -229,7 +232,7 @@ export default function GraphPage() {
       // Update physics options based on user preferences
       if (layoutType === 'force') {
         newOptions.physics = {
-          ...newOptions.physics,
+          enabled: true,
           barnesHut: {
             gravitationalConstant: -nodeRepulsion * 2,
             centralGravity: 0.3,
@@ -238,7 +241,14 @@ export default function GraphPage() {
             damping: damping,
             avoidOverlap: 0.1
           },
-          solver: 'barnesHut'
+          solver: 'barnesHut',
+          stabilization: {
+            enabled: true,
+            iterations: 1000,
+            updateInterval: 100,
+            onlyDynamicEdges: false,
+            fit: true
+          }
         };
         // Reset layout to default for force-directed
         newOptions.layout = {
@@ -250,7 +260,7 @@ export default function GraphPage() {
           barnesHut: {
             gravitationalConstant: -1000,
             centralGravity: 0.3,
-            springLength: 100,
+            springLength: 250,
             springConstant: 0.04,
             damping: 0.09,
             avoidOverlap: 0
@@ -277,9 +287,15 @@ export default function GraphPage() {
         };
       }
       
+      // Update edge visibility based on showConnections state
+      newOptions.edges = {
+        ...newOptions.edges,
+        hidden: !showConnections
+      };
+      
       return newOptions;
     });
-  }, [layoutType, nodeRepulsion, linkDistance, springLength, springConstant, damping]);
+  }, [layoutType, nodeRepulsion, linkDistance, springLength, springConstant, damping, showConnections]);
   
   // Get color based on node type
   const getNodeColor = (node: Neo4jNode): string => {
@@ -540,7 +556,7 @@ export default function GraphPage() {
   
   // Reset graph layout
   const resetGraphLayout = () => {
-    setSpringLength(100);
+    setSpringLength(250);
     setSpringConstant(0.04);
     setDamping(0.09);
     setNodeRepulsion(1000);
@@ -691,6 +707,24 @@ export default function GraphPage() {
               <option value="force">Force-Directed</option>
               <option value="hierarchical">Hierarchical</option>
             </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Show Connections
+            </label>
+            <div className="flex items-center mt-2">
+              <input
+                type="checkbox"
+                id="showConnections"
+                checked={showConnections}
+                onChange={(e) => setShowConnections(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="showConnections" className="ml-2 block text-sm text-gray-900">
+                {showConnections ? 'Connections Visible' : 'Connections Hidden'}
+              </label>
+            </div>
           </div>
           
           <div>
