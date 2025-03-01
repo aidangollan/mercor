@@ -12,7 +12,7 @@ export default function LinkedInConnectionsVerifier() {
   const [error, setError] = useState<string | null>(null);
 
   // Pluto manifest URL – ensure this file exists in your public folder.
-  const manifestUrl = "/pluto-manifest.json";
+  const manifestUrl = "https://github.com/aidangollan/mercor/blob/main/webapp/public/pluto-manifest.json";
 
   const handleStartVerification = () => {
     setIsVerifying(true);
