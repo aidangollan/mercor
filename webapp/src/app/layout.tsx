@@ -34,6 +34,9 @@ export default function RootLayout({
               <Link href="/baseclout" className="hover:text-gray-300">
                 BaseClout
               </Link>
+              <Link href="/graph" className="hover:text-gray-300">
+                Graph
+              </Link>
             </div>
           </div>
         </nav>

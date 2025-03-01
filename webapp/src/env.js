@@ -16,6 +16,9 @@ export const env = createEnv({
     NEO4J_PASSWORD: z.string(),
     PROXYCURL_API_KEY: z.string(),
     ANTHROPIC_API_KEY: z.string(),
+    OPENAI_KEY: z.string(),
+    LINKEDIN_CLIENT_ID: z.string().optional(),
+    LINKEDIN_CLIENT_SECRET: z.string().optional(),
   },
 
   /**
@@ -39,6 +42,9 @@ export const env = createEnv({
     NEO4J_PASSWORD: process.env.NEO4J_PASSWORD,
     PROXYCURL_API_KEY: process.env.PROXYCURL_API_KEY,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    OPENAI_KEY: process.env.OPENAI_KEY,
+    LINKEDIN_CLIENT_ID: process.env.LINKEDIN_CLIENT_ID,
+    LINKEDIN_CLIENT_SECRET: process.env.LINKEDIN_CLIENT_SECRET,
     // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
   },
   /**

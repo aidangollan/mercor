@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runQuery } from '~/server/db/neo4j';
-import { Person } from '~/server/db/models/person';
-import { int } from 'neo4j-driver';
 
 // Interface for graph data
 interface GraphData {
@@ -23,32 +21,22 @@ interface Relationship {
   properties: Record<string, any>;
 }
 
-// Interface for Neo4j count result
-interface Neo4jCountResult {
-  nodeCount?: { low: number; high: number } | number;
-  relationshipCount?: { low: number; high: number } | number;
-}
-
 /**
  * GET /api/graph
  * Returns the current state of the graph
  */
 export async function GET(request: NextRequest) {
   try {
-    const url = new URL(request.url);
-    const batchSize = Math.floor(parseInt(url.searchParams.get('batchSize') || '1000'));
-    const page = Math.floor(parseInt(url.searchParams.get('page') || '0'));
+    const graphData = await getGraphData();
     
-    const graphData = await getGraphData(batchSize, page);
-    
-    // Get total counts for pagination info
+    // Get total counts for statistics
     const countResult = await runQuery(`
-      MATCH (n)
+      MATCH (n:Person)
       RETURN count(n) AS nodeCount
     `);
     
     const relationshipCountResult = await runQuery(`
-      MATCH ()-[r]->()
+      MATCH (:Person)-[r]->(:Person)
       RETURN count(r) AS relationshipCount
     `);
     
@@ -65,21 +53,11 @@ export async function GET(request: NextRequest) {
           : relationshipCountResult[0].relationshipCount) || 0
       : 0;
     
-    // Ensure nodeCount and relationshipCount are numbers
-    const nodeCountNum = typeof nodeCount === 'object' && nodeCount !== null ? 0 : Number(nodeCount);
-    const relationshipCountNum = typeof relationshipCount === 'object' && relationshipCount !== null ? 0 : Number(relationshipCount);
-    
-    const totalPages = Math.ceil(Math.max(nodeCountNum, relationshipCountNum) / batchSize);
-    
     return NextResponse.json({
       data: graphData,
-      pagination: {
-        page,
-        batchSize,
-        totalPages,
+      stats: {
         nodeCount,
-        relationshipCount,
-        hasMore: page < totalPages - 1
+        relationshipCount
       }
     });
   } catch (error) {
@@ -89,182 +67,16 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST /api/graph/generate
- * Generates random nodes and relationships in the graph
+ * Helper function to get the current graph data without pagination
  */
-export async function POST(request: NextRequest) {
-  try {
-    const { 
-      nodeCount = 10, 
-      relationshipCount = 15,
-      batchSize = 500,
-      clearExisting = true
-    } = await request.json();
-    
-    // Validate input
-    if (nodeCount < 1 || nodeCount > 10000) {
-      return NextResponse.json(
-        { error: 'nodeCount must be between 1 and 10000' },
-        { status: 400 }
-      );
-    }
-    
-    if (relationshipCount < 0 || relationshipCount > 100000) {
-      return NextResponse.json(
-        { error: 'relationshipCount must be between 0 and 100000' },
-        { status: 400 }
-      );
-    }
-    
-    if (batchSize < 1 || batchSize > 5000) {
-      return NextResponse.json(
-        { error: 'batchSize must be between 1 and 5000' },
-        { status: 400 }
-      );
-    }
-    
-    // Convert all inputs to integers
-    const nodeCountInt = Math.floor(nodeCount);
-    const relationshipCountInt = Math.floor(relationshipCount);
-    const batchSizeInt = Math.floor(batchSize);
-    
-    // First, clear the existing graph if requested
-    if (clearExisting) {
-      await runQuery(`
-        MATCH (n)
-        DETACH DELETE n
-      `);
-    }
-    
-    // Generate random people names
-    const names = [
-      'Alice', 'Bob', 'Charlie', 'David', 'Emma', 'Frank', 'Grace', 'Henry', 
-      'Isabella', 'Jack', 'Kate', 'Liam', 'Mia', 'Noah', 'Olivia', 'Peter', 
-      'Quinn', 'Ryan', 'Sophia', 'Thomas', 'Uma', 'Victor', 'Wendy', 'Xavier', 
-      'Yasmine', 'Zach'
-    ];
-    
-    // Create nodes in batches
-    const nodeBatches = Math.ceil(nodeCountInt / batchSizeInt);
-    console.log(`Creating ${nodeCountInt} nodes in ${nodeBatches} batches of up to ${batchSizeInt} nodes each`);
-    
-    for (let batch = 0; batch < nodeBatches; batch++) {
-      const currentBatchSize = Math.min(batchSizeInt, nodeCountInt - (batch * batchSizeInt));
-      const batchStart = batch * batchSizeInt;
-      
-      // Create a batch of parameters for this batch
-      const params: Record<string, any> = {};
-      let cypherCreate = `UNWIND range(0, ${currentBatchSize - 1}) AS i CREATE (p:Person {`;
-      
-      // Add parameters for name, clout_score, and linkedin_url
-      ['name', 'clout_score', 'linkedin_url'].forEach(prop => {
-        params[prop] = [];
-        for (let i = 0; i < currentBatchSize; i++) {
-          const idx = batchStart + i;
-          const randomNameIndex = Math.floor(Math.random() * names.length);
-          const name = `${names[randomNameIndex]}_${idx}`;
-          
-          if (prop === 'name') {
-            params[prop].push(name);
-          } else if (prop === 'clout_score') {
-            params[prop].push(Math.floor(Math.random() * 100));
-          } else if (prop === 'linkedin_url') {
-            params[prop].push(`https://linkedin.com/in/${name.toLowerCase()}`);
-          }
-        }
-      });
-      
-      // Complete the Cypher query
-      cypherCreate += `name: $name[i], clout_score: $clout_score[i], linkedin_url: $linkedin_url[i]})`;
-      
-      // Execute the batch creation
-      await runQuery(cypherCreate, params);
-      console.log(`Created batch ${batch + 1}/${nodeBatches} with ${currentBatchSize} nodes`);
-    }
-    
-    // Create random KNOWS relationships in batches
-    const relationshipTypes = ['KNOWS', 'WORKS_WITH', 'MANAGES', 'MENTORS'];
-    const relationshipBatches = Math.ceil(relationshipCountInt / batchSizeInt);
-    console.log(`Creating ${relationshipCountInt} relationships in ${relationshipBatches} batches of up to ${batchSizeInt} relationships each`);
-    
-    for (let batch = 0; batch < relationshipBatches; batch++) {
-      const currentBatchSize = Math.min(batchSizeInt, relationshipCountInt - (batch * batchSizeInt));
-      const randomType = relationshipTypes[Math.floor(Math.random() * relationshipTypes.length)];
-      
-      // Create a batch of relationships at once
-      await runQuery(`
-        MATCH (p1:Person)
-        MATCH (p2:Person)
-        WHERE p1 <> p2
-        WITH p1, p2, rand() AS r
-        ORDER BY r
-        LIMIT $batchSize
-        MERGE (p1)-[rel:${randomType} {strength: toInteger(rand() * 10) + 1}]->(p2)
-        RETURN count(rel)
-      `, { batchSize: int(Math.floor(currentBatchSize)) });
-      
-      console.log(`Created batch ${batch + 1}/${relationshipBatches} with ${currentBatchSize} relationships of type ${randomType}`);
-    }
-    
-    // Return the new graph data (first page only)
-    const graphData = await getGraphData(1000, 0);
-    
-    // Get total counts
-    const countResult = await runQuery(`
-      MATCH (n)
-      RETURN count(n) AS nodeCount
-    `);
-    
-    const relationshipCountResult = await runQuery(`
-      MATCH ()-[r]->()
-      RETURN count(r) AS relationshipCount
-    `);
-    
-    // Access the Neo4j integer values correctly
-    const actualNodeCount = countResult[0] && typeof countResult[0] === 'object' && 'nodeCount' in countResult[0] 
-      ? (countResult[0].nodeCount !== null && typeof countResult[0].nodeCount === 'object' && 'low' in countResult[0].nodeCount 
-          ? countResult[0].nodeCount.low 
-          : countResult[0].nodeCount) || 0
-      : 0;
-      
-    const actualRelationshipCount = relationshipCountResult[0] && typeof relationshipCountResult[0] === 'object' && 'relationshipCount' in relationshipCountResult[0]
-      ? (relationshipCountResult[0].relationshipCount !== null && typeof relationshipCountResult[0].relationshipCount === 'object' && 'low' in relationshipCountResult[0].relationshipCount
-          ? relationshipCountResult[0].relationshipCount.low
-          : relationshipCountResult[0].relationshipCount) || 0
-      : 0;
-    
-    return NextResponse.json({ 
-      message: `Generated ${actualNodeCount} nodes and ${actualRelationshipCount} relationships`,
-      data: graphData,
-      pagination: {
-        page: 0,
-        batchSize: 1000,
-        totalNodes: actualNodeCount,
-        totalRelationships: actualRelationshipCount
-      }
-    });
-  } catch (error) {
-    console.error('Error generating graph data:', error);
-    return NextResponse.json({ error: 'Failed to generate graph data' }, { status: 500 });
-  }
-}
-
-/**
- * Helper function to get the current graph data with pagination
- */
-async function getGraphData(batchSize: number = 1000, page: number = 0): Promise<GraphData> {
-  // Fetch nodes with pagination
+async function getGraphData(): Promise<GraphData> {
+  // Fetch all nodes
   const nodesCypher = `
-    MATCH (n)
+    MATCH (n:Person)
     RETURN n
-    SKIP $skip
-    LIMIT $limit
   `;
   
-  const nodesResult = await runQuery(nodesCypher, { 
-    skip: int(Math.floor(page * batchSize)), 
-    limit: int(Math.floor(batchSize)) 
-  });
+  const nodesResult = await runQuery(nodesCypher);
   
   // Process nodes
   const nodes = new Map<string, Node>();
@@ -299,12 +111,10 @@ async function getGraphData(batchSize: number = 1000, page: number = 0): Promise
     }
   });
   
-  // Fetch relationships with pagination - use a simpler approach
+  // Fetch all relationships
   const relationshipsCypher = `
-    MATCH (n)-[r]->(m)
+    MATCH (n:Person)-[r]->(m:Person)
     RETURN n, r, m
-    SKIP $skip
-    LIMIT $limit
   `;
   
   // If we have no nodes, return empty result
@@ -315,10 +125,7 @@ async function getGraphData(batchSize: number = 1000, page: number = 0): Promise
     };
   }
   
-  const relationshipsResult = await runQuery(relationshipsCypher, { 
-    skip: int(Math.floor(page * batchSize)),
-    limit: int(Math.floor(batchSize))
-  });
+  const relationshipsResult = await runQuery(relationshipsCypher);
   
   // Process relationships and any additional nodes
   const relationships: Relationship[] = [];
