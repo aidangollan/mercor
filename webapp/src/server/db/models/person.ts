@@ -103,6 +103,6 @@ export class PersonModel {
     `;
     
     const result = await runQuery<{ deleted: number }>(cypher, { name });
-    return result[0]?.deleted > 0;
+    return !!(result[0] && result[0].deleted > 0);
   }
 }
