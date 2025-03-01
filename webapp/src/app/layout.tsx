@@ -28,8 +28,8 @@ export default function RootLayout({
               <Link href="/people" className="hover:text-gray-300">
                 People
               </Link>
-              <Link href="/graph" className="hover:text-gray-300">
-                Graph
+              <Link href="/linkedin" className="hover:text-gray-300">
+                LinkedIn
               </Link>
             </div>
           </div>

@@ -23,6 +23,12 @@ export default function HomePage() {
           >
             View Graph Visualization
           </Link>
+          <Link
+            href="/linkedin"
+            className="rounded-md bg-purple-600 px-6 py-3 text-lg font-semibold text-white shadow-sm hover:bg-purple-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-600"
+          >
+            Verify LinkedIn Connections
+          </Link>
         </div>
       </div>
     </main>

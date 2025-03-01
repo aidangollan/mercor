@@ -1,0 +1,73 @@
+{
+    "name": "linkedin-connections",
+    "displayName": "LinkedIn Connections",
+    "version": "0.1.0",
+    "description": "Verify a user's LinkedIn connections",
+    "tags": ["social", "professional", "connections"],
+    "iconUrl": "https://cdn-icons-png.flaticon.com/512/174/174857.png",
+    "website": "https://linkedin.com",
+    "platforms": ["web"],
+    "connectionType": "oauth2",
+    "isLive": true,
+    "connectMessage": "Connect your LinkedIn account to verify your professional connections",
+    "oauthConfig": {
+      "authorizationUrl": "https://www.linkedin.com/oauth/v2/authorization",
+      "tokenUrl": "https://www.linkedin.com/oauth/v2/accessToken",
+      "scope": "r_emailaddress r_liteprofile r_connections",
+      "clientId": "{{LINKEDIN_CLIENT_ID}}",
+      "redirectUrl": "{{REDIRECT_URL}}"
+    },
+    "dataVerifiers": [
+      {
+        "name": "connections-verifier",
+        "displayName": "LinkedIn Connections",
+        "description": "Verifies the number and list of LinkedIn connections",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "connectionCount",
+            "displayName": "Connection Count",
+            "description": "The number of LinkedIn connections",
+            "type": "number"
+          },
+          {
+            "name": "connections",
+            "displayName": "Connections",
+            "description": "List of LinkedIn connections",
+            "type": "array",
+            "itemType": "object",
+            "properties": [
+              {
+                "name": "firstName",
+                "displayName": "First Name",
+                "description": "First name of the connection",
+                "type": "string"
+              },
+              {
+                "name": "lastName",
+                "displayName": "Last Name",
+                "description": "Last name of the connection",
+                "type": "string"
+              },
+              {
+                "name": "id",
+                "displayName": "LinkedIn ID",
+                "description": "LinkedIn ID of the connection",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "onConnect": {
+          "fetch": {
+            "url": "https://api.linkedin.com/v2/connections?q=viewer&start=0&count=50",
+            "method": "GET",
+            "headers": {
+              "Authorization": "Bearer {{accessToken}}"
+            }
+          },
+          "transform": "function transform(response) {\n  const connections = response.elements || [];\n  return {\n    connectionCount: connections.length,\n    connections: connections.map(conn => ({\n      firstName: conn.firstName,\n      lastName: conn.lastName,\n      id: conn.id\n    }))\n  };\n}"
+        }
+      }
+    ]
+  }
