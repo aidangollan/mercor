@@ -2,11 +2,22 @@
 
 import { useState } from 'react';
 
+interface AnthropicAnalysis {
+  baseCloutRating: number;
+  analysis: string;
+  recommendations: string[];
+}
+
+interface ProfileData {
+  anthropicAnalysis: AnthropicAnalysis;
+  [key: string]: any;
+}
+
 export default function BaseCloutPage() {
   const [linkedinUrl, setLinkedinUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [profileData, setProfileData] = useState<any>(null);
+  const [profileData, setProfileData] = useState<ProfileData | null>(null);
 
   const analyzeProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,9 +90,38 @@ export default function BaseCloutPage() {
       {profileData && (
         <div className="bg-white shadow-md rounded p-6">
           <h2 className="text-xl font-semibold mb-4">Profile Analysis Results</h2>
-          <pre className="bg-gray-100 p-4 rounded overflow-x-auto">
-            {JSON.stringify(profileData, null, 2)}
-          </pre>
+          
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Base Clout Rating</h3>
+              <div className="text-3xl font-bold text-blue-600">
+                {profileData.anthropicAnalysis.baseCloutRating}/100
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold mb-2">Analysis</h3>
+              <p className="text-gray-700 whitespace-pre-wrap">
+                {profileData.anthropicAnalysis.analysis}
+              </p>
+            </div>
+
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold mb-2">Recommendations</h3>
+              <ul className="list-disc list-inside space-y-2">
+                {profileData.anthropicAnalysis.recommendations.map((rec, index) => (
+                  <li key={index} className="text-gray-700">{rec}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold mb-2">Raw Profile Data</h3>
+            <pre className="bg-gray-100 p-4 rounded overflow-x-auto text-sm">
+              {JSON.stringify(profileData, null, 2)}
+            </pre>
+          </div>
         </div>
       )}
     </div>

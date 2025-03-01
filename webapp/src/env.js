@@ -14,6 +14,8 @@ export const env = createEnv({
     NEO4J_URI: z.string().url(),
     NEO4J_USERNAME: z.string(),
     NEO4J_PASSWORD: z.string(),
+    PROXYCURL_API_KEY: z.string(),
+    ANTHROPIC_API_KEY: z.string(),
   },
 
   /**
@@ -35,6 +37,8 @@ export const env = createEnv({
     NEO4J_URI: process.env.NEO4J_URI,
     NEO4J_USERNAME: process.env.NEO4J_USERNAME,
     NEO4J_PASSWORD: process.env.NEO4J_PASSWORD,
+    PROXYCURL_API_KEY: process.env.PROXYCURL_API_KEY,
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
   },
   /**
