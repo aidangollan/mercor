@@ -1,24 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { env } from '~/env';
+import { runQuery } from '~/server/db/neo4j';
 
 const PROXYCURL_API_KEY = env.PROXYCURL_API_KEY;
 const PROXYCURL_API_URL = 'https://nubela.co/proxycurl/api/v2/linkedin';
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 
-async function analyzeWithAnthropic(profileData: any) {
+async function analyzeWithAnthropic(profileData: any, connectionsData?: any[]) {
   try {
-    const prompt = `You are a professional recruiter and talent evaluator. Please analyze this LinkedIn profile data and provide:
-1. A brief evaluation of the profile's strengths and areas for improvement
-2. A "Base Clout Rating" from 0-100 based on their experience, skills, education, and overall profile strength
-3. Key recommendations for improving their professional presence
+    let connectionsPrompt = '';
+    if (connectionsData && connectionsData.length > 0) {
+      connectionsPrompt = `\n\nLinkedIn Connections Data:\n${JSON.stringify(connectionsData, null, 2)}`;
+    }
 
-Here's the profile data:
-${JSON.stringify(profileData, null, 2)}
+    const prompt = `You are a professional recruiter and talent evaluator. Please analyze this LinkedIn profile data and its network of connections. In your analysis, provide:
+1. A brief evaluation of the profile's strengths and areas for improvement.
+2. A "Base Clout Rating" from 0-100 based on their experience, skills, education, and overall profile strength.
+3. A dedicated section titled "Network Insights" where you analyze the quality, influence, and relevance of the profile's connections.
+4. Key recommendations for improving their professional presence.
+
+Profile Data:
+${JSON.stringify(profileData, null, 2)}${connectionsPrompt}
 
 Please format your response as JSON with the following structure:
 {
   "baseCloutRating": number,
   "analysis": string,
+  "networkInsights": string,
   "recommendations": string[]
 }`;
 
@@ -44,7 +52,14 @@ Please format your response as JSON with the following structure:
     }
 
     const anthropicResponse = await response.json();
-    const analysis = JSON.parse(anthropicResponse.content[0].text);
+    let responseText = anthropicResponse.content[0].text.trim();
+
+    // Remove markdown code fencing if present (e.g., "```json" at the start and "```" at the end)
+    if (responseText.startsWith("```")) {
+      responseText = responseText.replace(/^```(?:json)?\n/, '').replace(/\n```$/, '');
+    }
+
+    const analysis = JSON.parse(responseText);
     
     return {
       ...profileData,
@@ -56,46 +71,57 @@ Please format your response as JSON with the following structure:
   }
 }
 
+async function fetchProfile(linkedinUrl: string) {
+  const params = new URLSearchParams({
+    url: linkedinUrl,
+    extra: 'include',
+    use_cache: 'if-present',
+    fallback_to_cache: 'on-error',
+  });
+  const response = await fetch(`${PROXYCURL_API_URL}?${params}`, {
+    headers: {
+      Authorization: `Bearer ${PROXYCURL_API_KEY}`,
+    },
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Error fetching profile for ${linkedinUrl}: ${response.status} ${response.statusText}. Response: ${errorText}`);
+    throw new Error(`Failed to fetch LinkedIn data: ${response.statusText}`);
+  }
+  return response.json();
+}
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  const linkedinUrl = searchParams.get('url');
+  const linkedinUrlParam = searchParams.get('url');
 
-  if (!linkedinUrl) {
+  if (!linkedinUrlParam) {
     return NextResponse.json(
       { error: 'LinkedIn URL is required' },
       { status: 400 }
     );
   }
 
+  // Normalize the LinkedIn URL by removing trailing slashes
+  const normalizedUrl = linkedinUrlParam.replace(/\/+$/, '');
+
   try {
-    const params = new URLSearchParams({
-      url: linkedinUrl,
-      extra: 'include',
-      github_profile_id: 'include',
-      facebook_profile_id: 'include',
-      twitter_profile_id: 'include',
-      personal_contact_number: 'include',
-      personal_email: 'include',
-      inferred_salary: 'include',
-      skills: 'include',
-      use_cache: 'if-present',
-      fallback_to_cache: 'on-error',
-    });
+    const linkedinData = await fetchProfile(normalizedUrl);
 
-    const response = await fetch(`${PROXYCURL_API_URL}?${params}`, {
-      headers: {
-        'Authorization': `Bearer ${PROXYCURL_API_KEY}`,
-      },
-    });
+    // Retrieve connections from Neo4j associated with this profile
+    const connectionsResult = await runQuery<{ c: { properties: any } }>(
+      `
+      MATCH (p:Person {linkedin_url: $linkedinUrl})-[:CONNECTED_TO]->(c:Connection)
+      RETURN c
+      `,
+      { linkedinUrl: normalizedUrl }
+    );
+    const connectionsData = connectionsResult.map(record => record.c.properties);
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch LinkedIn data');
-    }
-
-    const linkedinData = await response.json();
-    const enrichedData = await analyzeWithAnthropic(linkedinData);
+    const enrichedData = await analyzeWithAnthropic(linkedinData, connectionsData);
     
-    return NextResponse.json(enrichedData);
+    // Include connections data in the response
+    return NextResponse.json({ ...enrichedData, connections: connectionsData });
   } catch (error) {
     console.error('Error processing profile:', error);
     return NextResponse.json(
@@ -103,4 +129,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}  

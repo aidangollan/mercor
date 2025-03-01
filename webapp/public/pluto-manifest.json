@@ -7,22 +7,24 @@
     "iconUrl": "https://cdn-icons-png.flaticon.com/512/174/174857.png",
     "website": "https://linkedin.com",
     "platforms": ["web"],
-    "connectionType": "oauth2",
+    "connectionType": "manual",
     "isLive": true,
-    "connectMessage": "Connect your LinkedIn account to verify your professional connections",
-    "oauthConfig": {
-      "authorizationUrl": "https://www.linkedin.com/oauth/v2/authorization",
-      "tokenUrl": "https://www.linkedin.com/oauth/v2/accessToken",
-      "scope": "r_emailaddress r_liteprofile r_connections",
-      "clientId": "{{LINKEDIN_CLIENT_ID}}",
-      "redirectUrl": "{{REDIRECT_URL}}"
-    },
+    "connectMessage": "Upload your LinkedIn connections data to verify your network",
     "dataVerifiers": [
       {
         "name": "connections-verifier",
         "displayName": "LinkedIn Connections",
         "description": "Verifies the number and list of LinkedIn connections",
-        "inputs": [],
+        "inputs": [
+          {
+            "name": "connectionsData",
+            "displayName": "Connections Data",
+            "description": "Your exported LinkedIn connections data",
+            "type": "file",
+            "fileTypes": [".csv", ".json"],
+            "required": true
+          }
+        ],
         "outputs": [
           {
             "name": "connectionCount",
@@ -59,14 +61,7 @@
           }
         ],
         "onConnect": {
-          "fetch": {
-            "url": "https://api.linkedin.com/v2/connections?q=viewer&start=0&count=50",
-            "method": "GET",
-            "headers": {
-              "Authorization": "Bearer {{accessToken}}"
-            }
-          },
-          "transform": "function transform(response) {\n  const connections = response.elements || [];\n  return {\n    connectionCount: connections.length,\n    connections: connections.map(conn => ({\n      firstName: conn.firstName,\n      lastName: conn.lastName,\n      id: conn.id\n    }))\n  };\n}"
+          "transform": "function transform(input) {\n  const connectionsData = input.connectionsData;\n  // Parse the file contents based on file type\n  let connections = [];\n  \n  try {\n    if (connectionsData.type.endsWith('json')) {\n      connections = JSON.parse(connectionsData.content);\n    } else if (connectionsData.type.endsWith('csv')) {\n      // Simple CSV parsing (improve as needed)\n      connections = connectionsData.content.split('\\n')\n        .filter(line => line.trim())\n        .map(line => {\n          const [firstName, lastName, email] = line.split(',');\n          return { firstName, lastName, id: email };\n        });\n    }\n    \n    return {\n      connectionCount: connections.length,\n      connections: connections.map(conn => ({\n        firstName: conn.firstName || '',\n        lastName: conn.lastName || '',\n        id: conn.id || ''\n      }))\n    };\n  } catch (error) {\n    throw new Error('Failed to parse connections data: ' + error.message);\n  }\n}"
         }
       }
     ]

@@ -5,12 +5,30 @@ import { useState } from 'react';
 interface AnthropicAnalysis {
   baseCloutRating: number;
   analysis: string;
+  networkInsights: string;
   recommendations: string[];
 }
 
 interface ProfileData {
   anthropicAnalysis: AnthropicAnalysis;
+  connections?: Array<{
+    firstName: string;
+    lastName: string;
+    profile: string | any;
+  }>;
   [key: string]: any;
+}
+
+function formatProfile(profile: string | any) {
+  if (typeof profile === 'string') {
+    try {
+      const parsed = JSON.parse(profile);
+      return JSON.stringify(parsed, null, 2);
+    } catch (e) {
+      return profile; // fallback: if parsing fails, return the raw string
+    }
+  }
+  return JSON.stringify(profile, null, 2);
 }
 
 export default function BaseCloutPage() {
@@ -107,6 +125,13 @@ export default function BaseCloutPage() {
             </div>
 
             <div className="mb-4">
+              <h3 className="text-lg font-semibold mb-2">Network Insights</h3>
+              <p className="text-gray-700 whitespace-pre-wrap">
+                {profileData.anthropicAnalysis.networkInsights}
+              </p>
+            </div>
+
+            <div className="mb-4">
               <h3 className="text-lg font-semibold mb-2">Recommendations</h3>
               <ul className="list-disc list-inside space-y-2">
                 {profileData.anthropicAnalysis.recommendations.map((rec, index) => (
@@ -115,13 +140,36 @@ export default function BaseCloutPage() {
               </ul>
             </div>
           </div>
-
-          <div className="mt-6">
-            <h3 className="text-lg font-semibold mb-2">Raw Profile Data</h3>
+          
+          {/* Show Raw Profile Data as a dropdown */}
+          <details className="mt-6 border p-4 rounded">
+            <summary className="cursor-pointer font-semibold">Raw Profile Data</summary>
             <pre className="bg-gray-100 p-4 rounded overflow-x-auto text-sm">
               {JSON.stringify(profileData, null, 2)}
             </pre>
-          </div>
+          </details>
+
+          {/* Show Connections with dropdowns */}
+          {profileData.connections && (
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold mb-2">Connections</h3>
+              {profileData.connections.map((connection, index) => (
+                <details key={index} className="border p-4 rounded mb-2">
+                  <summary className="cursor-pointer font-semibold">
+                    {connection.firstName} {connection.lastName}
+                  </summary>
+                  {connection.profile && (
+                    <div className="mt-2">
+                      <p className="font-medium">Profile Details:</p>
+                      <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto">
+                        {formatProfile(connection.profile)}
+                      </pre>
+                    </div>
+                  )}
+                </details>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -1,8 +1,26 @@
+"use client";
+
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { useState, useEffect } from "react";
 
 export default function HomePage() {
+  const searchParams = useSearchParams();
+  const [uploaded, setUploaded] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("uploaded") === "true") {
+      setUploaded(true);
+    }
+  }, [searchParams]);
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-white">
+      {uploaded && (
+        <div className="p-4 mb-4 bg-green-100 rounded">
+          <p className="text-green-800">Your LinkedIn connections have been uploaded successfully.</p>
+        </div>
+      )}
       <div className="container flex flex-col items-center justify-center gap-8 px-4 py-16">
         <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
           Neo4j Web App
