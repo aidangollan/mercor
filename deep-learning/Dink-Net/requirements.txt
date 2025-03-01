@@ -10,4 +10,4 @@ torch-sparse==0.6.12
 torch-spline-conv==1.2.1
 torch-geometric==2.1.0.post1
 tqdm==4.65.0
-wandb=0.15.4
+wandb==0.15.4

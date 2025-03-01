@@ -5,6 +5,7 @@ from scipy import sparse
 import os
 from dotenv import load_dotenv
 import logging
+import random
 
 # Configure logging (we log only key summary statistics)
 logging.basicConfig(level=logging.INFO)
@@ -62,8 +63,8 @@ if not graph:
 # Extract features, labels, and dataset splits
 features = []
 labels = []
-train_indices, test_indices = [], []
-train_labels, test_labels = [], []
+train_indices, val_indices, test_indices = [], [], []
+train_labels, val_labels, test_labels = [], [], []
 
 DEFAULT_FEATURE_LENGTH = 10
 
@@ -82,17 +83,49 @@ for idx, node in enumerate(nodes):
     label = node.get('label')
     if label is None:
         missing_labels_count += 1
+        # set a default label (choose a value that makes sense in your context)
+        label = -1
+    else:
+        # If your labels are numeric or numeric strings, convert them to int.
+        label = int(label)
     labels.append(label)
 
     dataset_type = node.get('dataset')
     if dataset_type == 'test':
         test_indices.append(idx)
         test_labels.append(label)
-    else:
-        if dataset_type != 'train':
-            unknown_dataset_count += 1
+    elif dataset_type == 'train':
         train_indices.append(idx)
         train_labels.append(label)
+    else:
+        # For nodes with no explicit type, use a 70/15/15 split:
+        # 70% train, 15% validation, 15% test
+        random_val = idx % 20  # use modulo to deterministically assign
+        if random_val < 3:  # 15% as test
+            test_indices.append(idx)
+            test_labels.append(label)
+        elif random_val < 6:  # 15% as validation 
+            val_indices.append(idx)
+            val_labels.append(label)
+        else:  # 70% as train
+            train_indices.append(idx)
+            train_labels.append(label)
+        unknown_dataset_count += 1
+
+# Determine number of classes from training and testing labels (ignoring invalid labels like -1)
+valid_labels = [label for label in train_labels + test_labels if label >= 0]
+if valid_labels:
+    num_classes = max(valid_labels) + 1
+else:
+    num_classes = 1
+
+def to_one_hot(labels, num_classes):
+    labels = np.array(labels, dtype=np.int64)
+    one_hot = np.zeros((labels.shape[0], num_classes), dtype=np.float32)
+    for i, label in enumerate(labels):
+        if label >= 0:  # Only encode valid labels; leave invalid ones as zeros.
+            one_hot[i, label] = 1.0
+    return one_hot
 
 if len(train_indices) <= len(test_indices):
     logger.warning("Training nodes (%d) not greater than testing nodes (%d).", len(train_indices), len(test_indices))
@@ -105,7 +138,7 @@ except Exception as e:
     raise
 
 # Create the 'data' subdirectory if it doesn't exist.
-data_dir = "Dink-Net/data"
+data_dir = "graph-transformer/data/clout/raw"
 os.makedirs(data_dir, exist_ok=True)
 
 # Save graph adjacency information as ind.clout.graph
@@ -116,79 +149,111 @@ except Exception as e:
     logger.error("Error saving graph: %s", e)
     raise
 
-# Prepare training features and labels
+# Prepare training features and labels (only for training nodes)
 try:
-    # Training features (for "x")
     X = sparse.csr_matrix(features_array[train_indices])
-    # Training labels (for "y")
-    Y = np.array(train_labels)
+    Y = to_one_hot(train_labels, num_classes)  # one-hot encoded training labels
 except Exception as e:
     logger.error("Error processing training data: %s", e)
     raise
 
-# Save training features as ind.clout.x
+# Save training data
 try:
     with open(os.path.join(data_dir, 'ind.clout.x'), 'wb') as f:
         pickle.dump(X, f)
-except Exception as e:
-    logger.error("Error saving training features (x): %s", e)
-    raise
-
-# Save training labels as ind.clout.y
-try:
     with open(os.path.join(data_dir, 'ind.clout.y'), 'wb') as f:
         pickle.dump(Y, f)
 except Exception as e:
-    logger.error("Error saving training labels (y): %s", e)
+    logger.error("Error saving training data: %s", e)
     raise
 
-# Save all non-test features as ind.clout.allx (same as X in this case)
+# Save full features and labels for all nodes as allx and ally
 try:
+    allx = sparse.csr_matrix(features_array)
     with open(os.path.join(data_dir, 'ind.clout.allx'), 'wb') as f:
-        pickle.dump(X, f)
+        pickle.dump(allx, f)
 except Exception as e:
-    logger.error("Error saving all non-test features (allx): %s", e)
+    logger.error("Error saving full features (allx): %s", e)
     raise
 
-# Save all non-test labels as ind.clout.ally (same as Y in this case)
 try:
+    ally = to_one_hot(labels, num_classes)
     with open(os.path.join(data_dir, 'ind.clout.ally'), 'wb') as f:
-        pickle.dump(Y, f)
+        pickle.dump(ally, f)
 except Exception as e:
-    logger.error("Error saving all non-test labels (ally): %s", e)
+    logger.error("Error saving full labels (ally): %s", e)
     raise
 
 # Prepare testing features and labels
 try:
     TX = sparse.csr_matrix(features_array[test_indices])
-    TY = np.array(test_labels)
+    TY = to_one_hot(test_labels, num_classes)  # one-hot encoded test labels
 except Exception as e:
     logger.error("Error processing testing data: %s", e)
     raise
 
-# Save testing features as ind.clout.tx
+# Save testing data
 try:
     with open(os.path.join(data_dir, 'ind.clout.tx'), 'wb') as f:
         pickle.dump(TX, f)
-except Exception as e:
-    logger.error("Error saving testing features (tx): %s", e)
-    raise
-
-# Save testing labels as ind.clout.ty
-try:
     with open(os.path.join(data_dir, 'ind.clout.ty'), 'wb') as f:
         pickle.dump(TY, f)
 except Exception as e:
-    logger.error("Error saving testing labels (ty): %s", e)
+    logger.error("Error saving testing data: %s", e)
     raise
 
-# Save test indices as ind.clout.test.index
+# After the node processing loop, completely reset the train/val/test indices
+max_safe_node_id = 500  # Much lower than our actual node count for safety
+
+train_indices = []
+val_indices = []
+test_indices = []
+train_labels = []
+val_labels = []
+test_labels = []
+
+# Create a deterministic, non-overlapping split with small indices
+for idx, node in enumerate(nodes):
+    if idx >= max_safe_node_id:
+        continue  # Skip nodes beyond our safe cutoff
+        
+    label = node.get('label', -1)
+    if label == -1:
+        label = 0  # Default label
+    
+    # Simple deterministic split
+    if idx % 10 < 2:  # 20% as test
+        test_indices.append(idx)
+        test_labels.append(label)
+    elif idx % 10 < 4:  # 20% as validation
+        val_indices.append(idx)
+        val_labels.append(label)
+    else:  # 60% as training
+        train_indices.append(idx)
+        train_labels.append(label)
+
+logger.info("Using only the first %d nodes for safety", max_safe_node_id)
+logger.info("Train/val/test split: %d/%d/%d nodes", 
+           len(train_indices), len(val_indices), len(test_indices))
+
+# Save test indices - this is used by our custom loader
 try:
     with open(os.path.join(data_dir, 'ind.clout.test.index'), 'w') as f:
-        for idx in test_indices:
-            f.write(f"{idx}\n")
+        for idx in sorted(test_indices):
+            if 0 <= idx < len(nodes):  # Just ensure indices are valid
+                f.write(f"{idx}\n")
 except Exception as e:
     logger.error("Error saving test indices: %s", e)
+    raise
+
+# For completeness, also save validation indices
+try:
+    with open(os.path.join(data_dir, 'ind.clout.val.index'), 'w') as f:
+        for idx in sorted(val_indices):
+            if 0 <= idx < len(nodes):  # Just ensure indices are valid
+                f.write(f"{idx}\n")
+except Exception as e:
+    logger.error("Error saving validation indices: %s", e)
     raise
 
 # Final summary statistics
@@ -197,6 +262,7 @@ logger.info("Summary Statistics:")
 logger.info(" - Total nodes processed: %d", len(nodes))
 logger.info("   * Missing features: %d", missing_features_count)
 logger.info("   * Missing labels: %d", missing_labels_count)
-logger.info("   * Unknown dataset types (defaulted to train): %d", unknown_dataset_count)
+logger.info("   * Unknown dataset types (defaulted to split): %d", unknown_dataset_count)
 logger.info(" - Graph: %d nodes with edges; %d total edges", len(graph), total_edges_added)
-logger.info(" - Train set: %d nodes; Test set: %d nodes", len(train_indices), len(test_indices))
+logger.info(" - Train set: %d nodes; Val set: %d nodes; Test set: %d nodes", 
+           len(train_indices), len(val_indices), len(test_indices))

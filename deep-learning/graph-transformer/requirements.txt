@@ -1,0 +1,6 @@
+torch>=2.0.0
+torch_geometric>=2.5.2
+graph-transformer-pytorch>=0.1.1
+einops>=0.3
+rotary-embedding-torch
+numpy
