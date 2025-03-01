@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-interface AnthropicAnalysis {
+interface GeminiAnalysis {
   baseCloutRating: number;
   analysis: string;
   networkInsights: string;
@@ -10,12 +10,12 @@ interface AnthropicAnalysis {
 }
 
 interface ProfileData {
-  anthropicAnalysis: AnthropicAnalysis;
+  geminiAnalysis: GeminiAnalysis;
   connections?: Array<{
     firstName: string;
     lastName: string;
     profile: string | any;
-  }>;
+  }> | Record<string, any>; // allow connections to also be an object
   [key: string]: any;
 }
 
@@ -113,28 +113,28 @@ export default function BaseCloutPage() {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">Base Clout Rating</h3>
               <div className="text-3xl font-bold text-blue-600">
-                {profileData.anthropicAnalysis.baseCloutRating}/100
+                {profileData.geminiAnalysis.baseCloutRating}/100
               </div>
             </div>
             
             <div className="mb-4">
               <h3 className="text-lg font-semibold mb-2">Analysis</h3>
               <p className="text-gray-700 whitespace-pre-wrap">
-                {profileData.anthropicAnalysis.analysis}
+                {profileData.geminiAnalysis.analysis}
               </p>
             </div>
 
             <div className="mb-4">
               <h3 className="text-lg font-semibold mb-2">Network Insights</h3>
               <p className="text-gray-700 whitespace-pre-wrap">
-                {profileData.anthropicAnalysis.networkInsights}
+                {profileData.geminiAnalysis.networkInsights}
               </p>
             </div>
 
             <div className="mb-4">
               <h3 className="text-lg font-semibold mb-2">Recommendations</h3>
               <ul className="list-disc list-inside space-y-2">
-                {profileData.anthropicAnalysis.recommendations.map((rec, index) => (
+                {profileData.geminiAnalysis.recommendations.map((rec, index) => (
                   <li key={index} className="text-gray-700">{rec}</li>
                 ))}
               </ul>
@@ -153,21 +153,40 @@ export default function BaseCloutPage() {
           {profileData.connections && (
             <div className="mt-6">
               <h3 className="text-lg font-semibold mb-2">Connections</h3>
-              {profileData.connections.map((connection, index) => (
-                <details key={index} className="border p-4 rounded mb-2">
-                  <summary className="cursor-pointer font-semibold">
-                    {connection.firstName} {connection.lastName}
-                  </summary>
-                  {connection.profile && (
-                    <div className="mt-2">
-                      <p className="font-medium">Profile Details:</p>
-                      <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto">
-                        {formatProfile(connection.profile)}
-                      </pre>
-                    </div>
-                  )}
-                </details>
-              ))}
+              {Array.isArray(profileData.connections) ? (
+                profileData.connections.map((connection, index) => (
+                  <details key={index} className="border p-4 rounded mb-2">
+                    <summary className="cursor-pointer font-semibold">
+                      {connection.firstName} {connection.lastName}
+                    </summary>
+                    {connection.profile && (
+                      <div className="mt-2">
+                        <p className="font-medium">Profile Details:</p>
+                        <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto">
+                          {formatProfile(connection.profile)}
+                        </pre>
+                      </div>
+                    )}
+                  </details>
+                ))
+              ) : (
+                // If connections is not an array, convert the object values into an array and map over them.
+                Object.values(profileData.connections).map((connection: any, index: number) => (
+                  <details key={index} className="border p-4 rounded mb-2">
+                    <summary className="cursor-pointer font-semibold">
+                      {connection.firstName} {connection.lastName}
+                    </summary>
+                    {connection.profile && (
+                      <div className="mt-2">
+                        <p className="font-medium">Profile Details:</p>
+                        <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto">
+                          {formatProfile(connection.profile)}
+                        </pre>
+                      </div>
+                    )}
+                  </details>
+                ))
+              )}
             </div>
           )}
         </div>

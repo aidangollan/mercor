@@ -1,6 +1,18 @@
+# Core dependencies
 torch>=2.0.0
 torch_geometric>=2.5.2
 graph-transformer-pytorch>=0.1.1
 einops>=0.3
 rotary-embedding-torch
 numpy
+scipy
+
+# Web/API dependencies
+flask
+requests
+
+# Database connectivity
+neo4j
+
+# Environment/configuration
+python-dotenv

@@ -296,7 +296,7 @@ async function runSimplePageRankAlgorithm() {
           cloutScore: record.cloutScore || 50,
           outLinks: [],
           inLinks: [],
-          pageRank: 1.0 / nodeCount, // Initial PageRank value
+          pageRank: 1.0 / Number(nodeCount),
           newPageRank: 0.0
         });
       }
@@ -335,10 +335,10 @@ async function runSimplePageRankAlgorithm() {
       // Calculate new PageRank values
       nodes.forEach(node => {
         // Add the damping factor component
-        node.newPageRank = (1.0 - dampingFactor) / nodeCount;
+        node.newPageRank = (1.0 - dampingFactor) / Number(nodeCount);
         
         // Add the contribution from incoming links
-        node.inLinks.forEach(inLinkId => {
+        node.inLinks.forEach((inLinkId: string) => {
           const inNode = nodes.get(inLinkId);
           if (inNode && inNode.outLinks.length > 0) {
             node.newPageRank += dampingFactor * inNode.pageRank / inNode.outLinks.length;
@@ -494,8 +494,15 @@ export async function POST(request: NextRequest) {
     }
     
     // Process each connection: analyze with ChatGPT and add to graph
-    const processedConnections = [];
-    const failedConnections = [];
+    interface ProcessedConnection {
+      id: string;
+      profile: any;
+      cloutScore: number;
+      analysis: any;
+    }
+
+    const processedConnections: ProcessedConnection[] = [];
+    const failedConnections: {profile: any; error: string}[] = [];
     
     // Process connections in batches to avoid overwhelming the system
     // Increased batch size for faster processing
@@ -623,12 +630,14 @@ export async function POST(request: NextRequest) {
       
       // Process batch results
       batchResults.forEach((result, index) => {
-        if (result.status === 'fulfilled') {
-          processedConnections.push(result.value);
+        if (result.status === 'fulfilled' && 'id' in result.value) {
+          processedConnections.push(result.value as ProcessedConnection);
         } else {
           failedConnections.push({
             profile: batch[index],
-            error: result.reason?.message || 'Unknown error'
+            error: result.status === 'rejected' 
+              ? result.reason?.message || 'Unknown error'
+              : 'Missing required fields'
           });
         }
       });
