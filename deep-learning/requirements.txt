@@ -1,0 +1,7 @@
+neo4j
+numpy
+scipy
+python-dotenv
+matplotlib
+networkx
+scikit-learn
