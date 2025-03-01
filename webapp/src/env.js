@@ -11,6 +11,9 @@ export const env = createEnv({
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
+    NEO4J_URI: z.string().url(),
+    NEO4J_USERNAME: z.string(),
+    NEO4J_PASSWORD: z.string(),
   },
 
   /**
@@ -29,6 +32,9 @@ export const env = createEnv({
   runtimeEnv: {
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: process.env.NODE_ENV,
+    NEO4J_URI: process.env.NEO4J_URI,
+    NEO4J_USERNAME: process.env.NEO4J_USERNAME,
+    NEO4J_PASSWORD: process.env.NEO4J_PASSWORD,
     // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
   },
   /**
