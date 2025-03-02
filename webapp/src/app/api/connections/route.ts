@@ -198,12 +198,24 @@ async function addNodeWithCloutToGraph(nodeType: string, data: any, cloutScore: 
   try {
     // Extract LinkedIn username from profile URL if available
     let linkedinUsername = null;
+    
+    // Try to extract from profile_url first
     if (data.profile_url) {
       // Extract username from linkedin.com/in/USERNAME format
-      const match = data.profile_url.match(/linkedin\.com\/in\/([^\/\?]+)/i);
+      const match = data.profile_url.match(/linkedin\.com\/in\/([^\/\?#]+)/i);
       if (match && match[1]) {
         linkedinUsername = match[1].toLowerCase();
       }
+    }
+    
+    // If not found in profile_url, try other fields
+    if (!linkedinUsername && data.public_identifier) {
+      linkedinUsername = data.public_identifier.toLowerCase();
+    }
+    
+    // If we still don't have a username but have a vanity name, use that
+    if (!linkedinUsername && data.vanity_name) {
+      linkedinUsername = data.vanity_name.toLowerCase();
     }
     
     // Use LinkedIn username as primary identifier if available, otherwise fall back to other IDs
@@ -218,6 +230,8 @@ async function addNodeWithCloutToGraph(nodeType: string, data: any, cloutScore: 
       : data.firstName && data.lastName 
         ? `${data.firstName} ${data.lastName}` 
         : data.name || nodeId;
+    
+    console.log(`Adding/updating node for ${name} with ID ${nodeId} and LinkedIn username ${linkedinUsername || 'unknown'}`);
 
     // Create or update the node in Neo4j with the clout score
     await runQuery(
@@ -420,14 +434,20 @@ export async function POST(request: NextRequest) {
     // Fetch profiles for each connection username
     const connectionProfiles = await Promise.all(
       usernames.map(async (username: string) => {
-        const linkedinUrl = `https://www.linkedin.com/in/${username}`;
+        // Ensure username doesn't already contain the domain
+        const cleanUsername = username.replace(/^https?:\/\/(?:www\.)?linkedin\.com\/in\//i, '');
+        
+        // Construct proper LinkedIn URL
+        const linkedinUrl = `https://www.linkedin.com/in/${cleanUsername}`;
+        console.log(`Processing connection with username: ${username}, using URL: ${linkedinUrl}`);
+        
         try {
           const profile = await fetchProfile(linkedinUrl);
-          return { username, profile };
+          return { username: cleanUsername, profile };
         } catch (error) {
-          console.error(`Error fetching profile for ${username}:`, error);
+          console.error(`Error fetching profile for ${cleanUsername}:`, error);
           return {
-            username,
+            username: cleanUsername,
             error: error instanceof Error ? error.message : String(error)
           };
         }
@@ -523,10 +543,20 @@ export async function POST(request: NextRequest) {
             // Extract LinkedIn username from profile URL if available
             let linkedinUsername = null;
             if (connectionProfile.profile_url) {
-              const match = connectionProfile.profile_url.match(/linkedin\.com\/in\/([^\/\?]+)/i);
+              const match = connectionProfile.profile_url.match(/linkedin\.com\/in\/([^\/\?#]+)/i);
               if (match && match[1]) {
                 linkedinUsername = match[1].toLowerCase();
               }
+            }
+            
+            // If not found in profile_url, try other fields
+            if (!linkedinUsername && connectionProfile.public_identifier) {
+              linkedinUsername = connectionProfile.public_identifier.toLowerCase();
+            }
+            
+            // If we still don't have a username but have a vanity name, use that
+            if (!linkedinUsername && connectionProfile.vanity_name) {
+              linkedinUsername = connectionProfile.vanity_name.toLowerCase();
             }
             
             // Store the result in the map using LinkedIn username as primary identifier
@@ -572,10 +602,20 @@ export async function POST(request: NextRequest) {
             // Extract LinkedIn username from profile URL if available
             let linkedinUsername = null;
             if (connectionProfile.profile_url) {
-              const match = connectionProfile.profile_url.match(/linkedin\.com\/in\/([^\/\?]+)/i);
+              const match = connectionProfile.profile_url.match(/linkedin\.com\/in\/([^\/\?#]+)/i);
               if (match && match[1]) {
                 linkedinUsername = match[1].toLowerCase();
               }
+            }
+            
+            // If not found in profile_url, try other fields
+            if (!linkedinUsername && connectionProfile.public_identifier) {
+              linkedinUsername = connectionProfile.public_identifier.toLowerCase();
+            }
+            
+            // If we still don't have a username but have a vanity name, use that
+            if (!linkedinUsername && connectionProfile.vanity_name) {
+              linkedinUsername = connectionProfile.vanity_name.toLowerCase();
             }
             
             // Use LinkedIn username as primary identifier

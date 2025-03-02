@@ -154,22 +154,65 @@ function scrollToLoadMoreConnections() {
     
     // Function to count current connections
     const countConnections = () => {
-      return document.querySelectorAll('a[href*="linkedin.com/in/"]').length;
+      // Count all LinkedIn profile links (both full and relative URLs)
+      const fullProfileLinks = document.querySelectorAll('a[href*="linkedin.com/in/"]');
+      const relativeProfileLinks = document.querySelectorAll('a[href^="/in/"]');
+      const totalLinks = fullProfileLinks.length + relativeProfileLinks.length;
+      
+      console.log("Current connection count:", totalLinks);
+      console.log("- Full URLs:", fullProfileLinks.length);
+      console.log("- Relative URLs:", relativeProfileLinks.length);
+      
+      // Debug: Check if there are any visible profile cards that don't have links
+      const possibleProfileCards = document.querySelectorAll('.artdeco-entity-lockup__title, .mn-connection-card__name');
+      console.log("Possible profile cards found:", possibleProfileCards.length);
+      
+      return totalLinks;
     };
 
     // Function to click all "Show more" buttons
     const clickShowMoreButtons = () => {
-      const showMoreButtons = Array.from(document.querySelectorAll('button')).filter(
-        button => button.textContent && 
-        (button.textContent.toLowerCase().includes('show more') || 
-         button.textContent.toLowerCase().includes('see more') ||
-         button.textContent.toLowerCase().includes('load more'))
+      // Expanded list of possible button text to match LinkedIn's UI
+      const buttonTexts = [
+        'show more', 'see more', 'load more', 'show all', 
+        'view more', 'more connections', 'more results',
+        'more', 'view all'
+      ];
+      
+      // Find buttons by text content
+      const showMoreButtons = Array.from(document.querySelectorAll('button, a.artdeco-button')).filter(
+        button => {
+          const text = button.textContent && button.textContent.toLowerCase().trim();
+          return text && buttonTexts.some(btnText => text.includes(btnText));
+        }
       );
       
+      console.log("Found 'Show More' buttons:", showMoreButtons.length);
+      
       if (showMoreButtons.length > 0) {
-        showMoreButtons.forEach(button => button.click());
+        showMoreButtons.forEach(button => {
+          console.log("Clicking button:", button.textContent);
+          button.click();
+        });
         return true;
       }
+      
+      // Also try to click on "See all X connections" links
+      const seeAllLinks = Array.from(document.querySelectorAll('a')).filter(
+        link => link.textContent && 
+        link.textContent.toLowerCase().includes('see all') && 
+        link.textContent.toLowerCase().includes('connection')
+      );
+      
+      if (seeAllLinks.length > 0) {
+        console.log("Found 'See All' links:", seeAllLinks.length);
+        seeAllLinks.forEach(link => {
+          console.log("Clicking link:", link.textContent);
+          link.click();
+        });
+        return true;
+      }
+      
       return false;
     };
 
@@ -413,18 +456,60 @@ function showLoadingState(modal, modalContent) {
 // This function searches the page for anchor tags with LinkedIn profile URLs,
 // extracts the username (the part after "/in/") and returns an array of usernames.
 function extractUsernames() {
-  const anchors = document.querySelectorAll('a[href*="linkedin.com/in/"]');
+  // Find both full LinkedIn URLs and relative URLs
+  const fullUrlAnchors = document.querySelectorAll('a[href*="linkedin.com/in/"]');
+  const relativeUrlAnchors = document.querySelectorAll('a[href^="/in/"]');
+  
+  console.log("Found LinkedIn full URL anchors:", fullUrlAnchors.length);
+  console.log("Found LinkedIn relative URL anchors:", relativeUrlAnchors.length);
+  
   const usernames = new Set(); // use a Set to avoid duplicates
-
-  anchors.forEach(anchor => {
+  
+  // Process full LinkedIn URLs
+  fullUrlAnchors.forEach(anchor => {
     const href = anchor.getAttribute('href');
-    // Use a regex to capture the username between "/in/" and the following "/" (or end of string)
-    const match = href.match(/linkedin\.com\/in\/([^\/?]+)/);
+    // Extract username from linkedin.com/in/USERNAME
+    const match = href.match(/linkedin\.com\/in\/([^\/\?#]+)/);
     if (match && match[1]) {
-      usernames.add(match[1]);
+      const username = match[1].toLowerCase(); // Normalize to lowercase
+      usernames.add(username);
+      console.log("Added username from full URL:", username);
+    } else {
+      console.log("Failed to extract username from full URL:", href);
     }
   });
-
+  
+  // Process relative URLs
+  relativeUrlAnchors.forEach(anchor => {
+    const href = anchor.getAttribute('href');
+    // Extract username from /in/USERNAME
+    const match = href.match(/^\/in\/([^\/\?#]+)/);
+    if (match && match[1]) {
+      const username = match[1].toLowerCase(); // Normalize to lowercase
+      usernames.add(username);
+      console.log("Added username from relative URL:", username);
+    } else {
+      console.log("Failed to extract username from relative URL:", href);
+    }
+  });
+  
+  // Debug: Log the first few anchors of each type
+  console.log("Sample of full URL anchors:");
+  Array.from(fullUrlAnchors).slice(0, 3).forEach((anchor, index) => {
+    console.log(`Full URL anchor ${index}:`, {
+      href: anchor.getAttribute('href'),
+      text: anchor.textContent.trim().substring(0, 30)
+    });
+  });
+  
+  console.log("Sample of relative URL anchors:");
+  Array.from(relativeUrlAnchors).slice(0, 3).forEach((anchor, index) => {
+    console.log(`Relative URL anchor ${index}:`, {
+      href: anchor.getAttribute('href'),
+      text: anchor.textContent.trim().substring(0, 30)
+    });
+  });
+  
   return Array.from(usernames);
 }
 
