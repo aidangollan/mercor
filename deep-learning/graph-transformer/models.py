@@ -13,11 +13,11 @@ class GraphTransformer(nn.Module):
         # Single TransformerConv layer with correct dimensions
         self.transformer = TransformerConv(
             in_channels=dim,
-            out_channels=dim // 8,  # Divide by number of heads
+            out_channels=dim,  # Keep same dimension throughout
             heads=8,
             dropout=0.1,
             edge_dim=None,
-            concat=True  # Concatenate head outputs
+            concat=False  # Average heads instead of concatenating
         )
         
         # Layer norm
@@ -54,88 +54,60 @@ class CareerGraphModel(nn.Module):
         model_dim=128,
         edge_dim=32,
         depth=3,
-        career_model_name="fazni/distilbert-base-uncased-career-path-prediction"
+        career_model_name="fazni/distilbert-base-uncased-career-path-prediction",
+        text_weight=0.8,  # Even higher weight for text
+        graph_weight=0.2  # Lower weight for graph
     ):
         super().__init__()
+        self.text_weight = text_weight
+        self.graph_weight = graph_weight
         
-        # Input projection
+        # Career prediction components (primary signal)
+        self.career_tokenizer = AutoTokenizer.from_pretrained(career_model_name)
+        self.career_model = AutoModelForSequenceClassification.from_pretrained(career_model_name)
+        
+        # Graph components (supplementary signal)
         self.input_proj = nn.Linear(input_dim, model_dim)
-        
-        # Graph transformer
         self.transformer = GraphTransformer(
             dim=model_dim,
             depth=depth,
             edge_dim=edge_dim
         )
-        
-        # Career prediction components
-        self.career_tokenizer = AutoTokenizer.from_pretrained(career_model_name)
-        self.career_model = AutoModelForSequenceClassification.from_pretrained(career_model_name)
-        
-        # Get BERT hidden size
-        self.text_hidden_size = self.career_model.config.hidden_size  # Usually 768
-        
-        # Fusion layers
-        self.graph_proj = nn.Linear(model_dim, model_dim)
-        self.text_proj = nn.Linear(self.text_hidden_size, model_dim)
-        
-        # Attention for combining node features
-        self.attention = nn.Sequential(
-            nn.Linear(model_dim, 1),
-            nn.Softmax(dim=0)
-        )
-        
-        # Final classifier with both graph and text features
-        self.classifier = nn.Linear(model_dim * 2, self.career_model.config.num_labels)
+        self.graph_proj = nn.Linear(model_dim, self.career_model.config.num_labels)
 
     def forward(self, graph_data, text_data):
-        # Process graph data
-        x = graph_data.x
-        adj = to_dense_adj(graph_data.edge_index)[0]
-        
-        # Project input features
-        x = self.input_proj(x)
-        
-        # Add batch dimension
-        x = x.unsqueeze(0)
-        adj = adj.unsqueeze(0)
-        
-        # Apply transformer
-        graph_features = self.transformer(x, adj)
-        graph_features = graph_features.squeeze(0)  # [num_nodes, model_dim]
-        
-        # Project graph features
-        graph_features = self.graph_proj(graph_features)  # [num_nodes, model_dim]
-        
-        # Compute attention weights for nodes
-        attention_weights = self.attention(graph_features)  # [num_nodes, 1]
-        
-        # Weighted sum of node features
-        graph_features = (graph_features * attention_weights).sum(dim=0)  # [model_dim]
-        
-        # Process text data
+        # Get text predictions (primary signal)
         text_inputs = self.career_tokenizer(
             text_data,
             padding=True,
             truncation=True,
-            return_tensors="pt"
-        ).to(graph_features.device)
+            return_tensors="pt",
+            max_length=512
+        ).to(graph_data.x.device)
         
-        # Get text embeddings from BERT
-        with torch.no_grad():
-            text_outputs = self.career_model(**text_inputs, output_hidden_states=True)
-            text_features = text_outputs.hidden_states[-1][:, 0, :]  # Use [CLS] token
+        # Get BERT predictions
+        text_outputs = self.career_model(**text_inputs)
+        text_logits = text_outputs.logits
         
-        # Project text features
-        text_features = self.text_proj(text_features.squeeze(0))  # [model_dim]
+        # Process graph data (supplementary signal)
+        x = graph_data.x
+        adj = to_dense_adj(graph_data.edge_index)[0]
+        x = self.input_proj(x)
+        x = x.unsqueeze(0)
+        adj = adj.unsqueeze(0)
         
-        # Combine graph and text features
-        combined_features = torch.cat([graph_features, text_features])  # [model_dim * 2]
+        # Get graph features
+        graph_features = self.transformer(x, adj)
+        graph_features = graph_features.squeeze(0)
+        graph_logits = self.graph_proj(graph_features.mean(dim=0))
         
-        # Final prediction
-        predictions = self.classifier(combined_features)
+        # Weighted combination of predictions
+        combined_logits = (
+            self.text_weight * text_logits +
+            self.graph_weight * graph_logits
+        )
         
-        return predictions
+        return combined_logits.squeeze(0)
 
     def predict_career_path(self, graph_data, text_data):
         self.eval()
@@ -143,14 +115,17 @@ class CareerGraphModel(nn.Module):
             predictions = self(graph_data, text_data)
             probabilities = torch.softmax(predictions, dim=-1)
             
-            # Get the most likely career path
-            predicted_class = torch.argmax(probabilities)
-            confidence_score = probabilities[predicted_class].item()
+            # Get top 3 predictions
+            top_probs, top_indices = torch.topk(probabilities, k=3)
             
-            return {
-                'label': self.career_model.config.id2label[predicted_class.item()],
-                'score': confidence_score
-            }
+            predictions = []
+            for prob, idx in zip(top_probs, top_indices):
+                predictions.append({
+                    'label': self.career_model.config.id2label[idx.item()],
+                    'score': prob.item()
+                })
+            
+            return predictions
 
 def create_career_pipeline(model_path=None):
     model = CareerGraphModel()
