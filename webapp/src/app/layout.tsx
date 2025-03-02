@@ -1,4 +1,4 @@
-import "~/styles/globals.css";
+import "@/styles/globals.css";
 
 import { GeistSans } from "geist/font/sans";
 import { type Metadata } from "next";
@@ -28,14 +28,8 @@ export default function RootLayout({
               <Link href="/people" className="hover:text-gray-300">
                 People
               </Link>
-              <Link href="/linkedin" className="hover:text-gray-300">
-                LinkedIn
-              </Link>
               <Link href="/baseclout" className="hover:text-gray-300">
                 BaseClout
-              </Link>
-              <Link href="/graph" className="hover:text-gray-300">
-                Graph
               </Link>
             </div>
           </div>

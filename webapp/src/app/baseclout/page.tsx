@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
+import TrainingMonitor from '@/components/TrainingMonitor';
 
 interface AnthropicAnalysis {
   baseCloutRating: number;
@@ -61,7 +62,15 @@ export default function BaseCloutPage() {
   };
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-8">Graph Transformer Training Progress</h1>
+      
+      <div className="bg-white rounded-lg shadow-lg p-6">
+        <Suspense fallback={<div>Loading training monitor...</div>}>
+          <TrainingMonitor />
+        </Suspense>
+      </div>
+      
       <h1 className="text-2xl font-bold mb-6">BaseClout Analysis</h1>
 
       {/* Error display */}

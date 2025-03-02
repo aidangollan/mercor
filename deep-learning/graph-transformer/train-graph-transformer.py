@@ -31,6 +31,8 @@ import pickle
 
 # Import the GraphTransformer model from lucidrains package.
 from graph_transformer_pytorch import GraphTransformer
+from websocket_server import TrainingDataStreamer
+import json
 
 
 def setup_distributed():
@@ -219,7 +221,7 @@ class ModelWrapper(nn.Module):
         return logits
 
 
-def train(args, device, use_ddp=True):
+def train(args, device, use_ddp=True, data_streamer=None):
     print("Processing...")
     
     # Use our custom dataset - removed the reference to args.dataset in the root path
@@ -261,18 +263,17 @@ def train(args, device, use_ddp=True):
         optimizer.zero_grad()
         
         # Forward pass: get logits for all nodes.
-        logits = model(data.x, adj, full_mask)  # [num_nodes, num_classes]
+        logits = model(data.x, adj, full_mask)
         
         # Compute loss on training nodes.
         loss = criterion(logits[data.train_mask], data.y[data.train_mask])
         loss.backward()
         optimizer.step()
         
-        # Evaluation (full-batch).
+        # Evaluation
         model.eval()
         with torch.no_grad():
             logits = model(data.x, adj, full_mask)
-            # Calculate accuracy on train, validation, and test sets.
             train_pred = logits[data.train_mask].argmax(dim=1)
             train_acc = (train_pred == data.y[data.train_mask]).float().mean().item()
             
@@ -282,13 +283,26 @@ def train(args, device, use_ddp=True):
             test_pred = logits[data.test_mask].argmax(dim=1)
             test_acc = (test_pred == data.y[data.test_mask]).float().mean().item()
         
-        if is_main_process() and epoch % args.print_every == 0:
-            print(f"Epoch {epoch:03d}: Loss {loss.item():.4f}, "
-                  f"Train Acc {train_acc:.4f}, Val Acc {val_acc:.4f}, Test Acc {test_acc:.4f}")
+        # Stream training data if streamer is available
+        if data_streamer is not None:
+            training_data = {
+                'epoch': epoch,
+                'loss': loss.item(),
+                'train_acc': train_acc,
+                'val_acc': val_acc,
+                'test_acc': test_acc,
+                'best_val_acc': best_val_acc,
+                'best_test_acc': best_test_acc
+            }
+            data_streamer.add_training_data(training_data)
         
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             best_test_acc = test_acc
+        
+        if is_main_process() and epoch % args.print_every == 0:
+            print(f"Epoch {epoch:03d}: Loss {loss.item():.4f}, "
+                  f"Train Acc {train_acc:.4f}, Val Acc {val_acc:.4f}, Test Acc {test_acc:.4f}")
     
     # On the main process, report best performance.
     if is_main_process():
@@ -301,9 +315,8 @@ def main():
     )
     parser.add_argument("--data_dir", type=str, default="./data",
                         help="Directory where the dataset is saved")
-    # Optionally, update the dataset name if your 600-node dataset has a different identifier.
-    parser.add_argument("--dataset", type=str, default="MySmallDataset",
-                        help="Name of the dataset (e.g., MySmallDataset or Cora)")
+    parser.add_argument("--dataset", type=str, default="clout",
+                        help="Name of the dataset (default: clout)")
     parser.add_argument("--epochs", type=int, default=100,
                         help="Number of training epochs (adjusted for smaller dataset)")
     parser.add_argument("--lr", type=float, default=0.01,
@@ -318,9 +331,22 @@ def main():
                         help="Print training info every n epochs")
     parser.add_argument("--macos", action="store_true",
                         help="Run on macOS (CPU only, no distributed training)")
+    parser.add_argument("--stream_data", action="store_true",
+                        help="Stream training data via WebSocket")
+    parser.add_argument("--ws_host", type=str, default="localhost",
+                        help="WebSocket server host")
+    parser.add_argument("--ws_port", type=int, default=8765,
+                        help="WebSocket server port")
     args = parser.parse_args()
 
-    # Select device and distributed mode based on the --macos flag.
+    # Initialize data streamer if requested
+    data_streamer = None
+    if args.stream_data:
+        data_streamer = TrainingDataStreamer(host=args.ws_host, port=args.ws_port)
+        data_streamer.start()
+        print(f"WebSocket server started at ws://{args.ws_host}:{args.ws_port}")
+
+    # Select device and distributed mode
     if args.macos:
         print("Running on macOS: using CPU and disabling distributed training.")
         device = torch.device("cpu")
@@ -331,7 +357,7 @@ def main():
         use_ddp = True
 
     start_time = time.time()
-    train(args, device, use_ddp)
+    train(args, device, use_ddp, data_streamer)
     if is_main_process():
         print(f"Training complete in {(time.time() - start_time)/60:.2f} minutes")
     if not args.macos:

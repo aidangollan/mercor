@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Graph Transformer Training Monitor</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        .chart {
+            width: 100%;
+            height: 400px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Graph Transformer Training Monitor</h1>
+    <div id="lossChart" class="chart"></div>
+    <div id="accuracyChart" class="chart"></div>
+    
+    <script>
+        // Initialize charts
+        const lossData = {
+            x: [],
+            y: [],
+            name: 'Loss',
+            type: 'scatter'
+        };
+        
+        const accuracyData = {
+            x: [],
+            y: [],
+            name: 'Train Acc',
+            type: 'scatter'
+        };
+        
+        const valAccData = {
+            x: [],
+            y: [],
+            name: 'Val Acc',
+            type: 'scatter'
+        };
+        
+        const testAccData = {
+            x: [],
+            y: [],
+            name: 'Test Acc',
+            type: 'scatter'
+        };
+        
+        Plotly.newPlot('lossChart', [lossData], {
+            title: 'Training Loss',
+            xaxis: { title: 'Epoch' },
+            yaxis: { title: 'Loss' }
+        });
+        
+        Plotly.newPlot('accuracyChart', [accuracyData, valAccData, testAccData], {
+            title: 'Accuracy Metrics',
+            xaxis: { title: 'Epoch' },
+            yaxis: { title: 'Accuracy', range: [0, 1] }
+        });
+        
+        // Connect to WebSocket server
+        const ws = new WebSocket('ws://localhost:8765');
+        
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            
+            // Update loss chart
+            Plotly.extendTraces('lossChart', {
+                x: [[data.epoch]],
+                y: [[data.loss]]
+            }, [0]);
+            
+            // Update accuracy chart
+            Plotly.extendTraces('accuracyChart', {
+                x: [[data.epoch], [data.epoch], [data.epoch]],
+                y: [[data.train_acc], [data.val_acc], [data.test_acc]]
+            }, [0, 1, 2]);
+        };
+        
+        ws.onclose = function() {
+            console.log('WebSocket connection closed');
+        };
+        
+        ws.onerror = function(error) {
+            console.error('WebSocket error:', error);
+        };
+    </script>
+</body>
+</html> 
